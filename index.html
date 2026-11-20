@@ -247,7 +247,7 @@ function update(dt){
   for(const f of S.fx){f.t+=dt; if(f.type==='star'){f.x+=f.vx*dt;f.y+=f.vy*dt;f.vy+=1200*dt;}}
   S.fx=S.fx.filter(f=>f.t<(f.type==='text'?(f.big?2:0.8):f.type==='beam'?0.6:f.type==='wink'?0.7:f.type==='shot'?0.35:0.5));
 
-  if(S.enHP<=0){screen='win';S.enHP=0;beep(523,0.2,'triangle');setTimeout(()=>beep(659,0.2,'triangle'),200);setTimeout(()=>beep(784,0.4,'triangle'),400);}
+  if(S.enHP<=0){screen='win';S.enHP=0; const was=allClear(); if(!CLEAR.includes(stageIdx)){CLEAR.push(stageIdx);saveClear();} S.toEnding=!was&&allClear();beep(523,0.2,'triangle');setTimeout(()=>beep(659,0.2,'triangle'),200);setTimeout(()=>beep(784,0.4,'triangle'),400);}
   if(S.ourHP<=0){screen='lose';loseSel=0;S.ourHP=0;beep(200,0.5,'sawtooth',0.06);}
 }
 
@@ -355,7 +355,12 @@ function overlay(title,sub,col){
   ctx.fillStyle='#000a';ctx.fillRect(0,0,W,H);
   txt(title,W/2,H/2-80,140,col);txt(sub,W/2,H/2+70,48,'#fff');
 }
-let titleT=0;
+let titleT=0, CLEAR=[];
+const clearKey=()=>'dw_clear_'+ACCOUNTS[acct].id;
+function loadClear(){try{CLEAR=JSON.parse(localStorage.getItem(clearKey()))||[];}catch(e){CLEAR=[];}}
+function saveClear(){try{localStorage.setItem(clearKey(),JSON.stringify(CLEAR));}catch(e){}}
+const allClear=()=>STAGES.every((_,i)=>CLEAR.includes(i));
+const titleBtns=()=>{const b=[[`단어 연습 (${words().length}개)`,words().length>0],['플레이어 바꾸기',true]]; if(allClear())b.push(['🎬 축하 영상',true]); return b;};
 function drawTitle(dt){
   titleT+=dt; drawBG(STAGES[stageIdx],titleT);
   txt(`플레이어: ${ACCOUNTS[acct].name}   최고 연속 정답 ${best}개`,40,50,36,'#fff','left');
@@ -366,13 +371,17 @@ function drawTitle(dt){
     ctx.drawImage(im.hero,x-w/2,y-h,w,h);});
   STAGES.forEach((s,i)=>{const x=W/2+(i-1.5)*440,y=640,on=trow===0&&i===stageIdx;
     ctx.fillStyle=on?(i===3?'#c084fc':'#ffd23f'):'#0008';rr(x-205,y-50,410,100,24);ctx.fill();
-    txt(s.name,x,y,34,on?'#222':'#fff','center',on?null:'#000');});
+    txt(s.name,x,y,34,on?'#222':'#fff','center',on?null:'#000');
+    if(CLEAR.includes(i)){ctx.fillStyle='#22c55e';ctx.beginPath();ctx.arc(x+190,y-45,26,0,7);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=7;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(x+178,y-46);ctx.lineTo(x+187,y-36);ctx.lineTo(x+203,y-56);ctx.stroke();}});
+  if(allClear())txt(`🏆 모든 단계 클리어! 🏆`,W/2,870,38,`hsl(${(titleT*120)%360},90%,65%)`);
+  else txt(`클리어 ${CLEAR.length} / ${STAGES.length}  ·  모두 깨면 축하 영상!`,W/2,870,34,'#ffd23f');
   const nw=words().length;
-  [[`단어 연습 (${nw}개)`,nw>0],['플레이어 바꾸기',true]].forEach(([t,en],i)=>{const x=W/2+(i-0.5)*560,y=790,on=trow===1&&tcol===i;
-    ctx.fillStyle=on?'#7dd3fc':'#0008';rr(x-250,y-50,500,100,24);ctx.fill();
+  const B=titleBtns(); B.forEach(([t,en],i)=>{const x=W/2+(i-(B.length-1)/2)*(B.length>2?500:560),y=790,on=trow===1&&tcol===i,bw=B.length>2?460:500;
+    ctx.fillStyle=on?'#7dd3fc':'#0008';rr(x-bw/2,y-50,bw,100,24);ctx.fill();
     txt(t,x,y,40,on?'#123':(en?'#fff':'#999'),'center',on?null:'#000');});
-  txt('◀▶▲▼ 고르기 · OK 시작',W/2,920,40,'#fff');
-  txt('게임 중: ◀▶ 캐릭터 · OK 출동 · ▲ 지갑 · ▼ 대포 · 30초마다 단어 퀴즈!',W/2,985,30,'#fffd');
+  txt('◀▶▲▼ 고르기 · OK 시작',W/2,935,38,'#fff');
+  txt('게임 중: ◀▶ 캐릭터 · OK 출동 · ▲ 지갑 · ▼ 대포 · 30초마다 단어 퀴즈!',W/2,995,30,'#fffd');
 }
 function drawAccount(dt){
   titleT+=dt; drawBG(STAGES[0],titleT);
@@ -394,7 +403,7 @@ const words=()=>(window.WORDS&&WORDS[ACCOUNTS[acct].id])||[];
 function loadStats(){try{return JSON.parse(localStorage.getItem('dw_stats_'+ACCOUNTS[acct].id))||{};}catch(e){return {};}}
 function saveStats(){try{localStorage.setItem('dw_stats_'+ACCOUNTS[acct].id,JSON.stringify(STATS));}catch(e){}}
 let STATS=loadStats(), recent=[], QZ=null, quizFrom='play', streak=0, PR=null;
-function pickAcct(){try{localStorage.setItem('dw_acct',acct);}catch(e){} STATS=loadStats(); loadBest(); recent=[]; streak=0; trow=0; screen='title';}
+function pickAcct(){try{localStorage.setItem('dw_acct',acct);}catch(e){} STATS=loadStats(); loadBest(); loadClear(); recent=[]; streak=0; trow=0; screen='title';}
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}return a;}
 // 최근 등록일 단어 가중치 6, 그 전 3, 나머지 1 / 틀린 횟수만큼 가중 / 방금 나온 단어는 제외
 function pickWord(){
@@ -579,6 +588,104 @@ function drawPracticeEnd(){
   txt('OK → 처음 화면',W/2,960,44,'#888','center',null);
 }
 
+/* ===== 축하 엔딩 영상 ===== */
+let END=null, musicTimers=[];
+function stopMusic(){musicTimers.forEach(clearTimeout);musicTimers=[];}
+function playMusic(){
+  stopMusic();
+  const N={C4:262,D4:294,E4:330,F4:349,G4:392,A4:440,B4:494,C5:523,D5:587,E5:659,F5:698,G5:784,A5:880,C6:1047,G3:196,C3:131,F3:175,A3:220,E3:165};
+  const mel=[['G4',1],['C5',1],['E5',1],['G5',2],['E5',1],['G5',3],
+             ['A4',1],['C5',1],['F5',1],['A5',2],['F5',1],['A5',3],
+             ['G5',1],['F5',1],['E5',1],['D5',1],['E5',1],['C5',1],['D5',2],['G4',2],
+             ['C5',1],['E5',1],['G5',1],['C6',4],[null,1]];
+  const bass=['C3','C3','F3','F3','G3','G3','C3','C3'];
+  const beat=0.2; let total=0;
+  for(let rep=0;rep<3;rep++){
+    let t=total; for(const [n,d] of mel){ if(n) musicTimers.push(setTimeout(()=>beep(N[n],beat*d*0.95,'triangle',0.07),t*1000)); t+=beat*d; }
+    let bt=total; for(let i=0;i<bass.length;i++){ for(let j=0;j<4;j++){const f=N[bass[i]]; musicTimers.push(setTimeout(()=>beep(f,beat*0.9,'square',0.025),(bt+j*beat)*1000));} bt+=beat*4; }
+    total=t;
+  }
+}
+function startEnding(){
+  const ws=words(); const learned=ws.filter(w=>(STATS[w.w]||{}).c>0).length;
+  END={t:0,learned,total:ws.length,fw:0}; screen='ending'; CFX=[]; banner=null; playMusic();
+}
+const ease=t=>t<0?0:t>1?1:1-Math.pow(1-t,3);
+function drawEnding(dt){
+  const t=(END.t+=dt), cx=W/2;
+  // 배경: 밤 → 새벽 → 금빛
+  const k=Math.min(1,Math.max(0,(t-3)/4));
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,`rgb(${20+k*40|0},${12+k*60|0},${45+k*120|0})`);g.addColorStop(1,`rgb(${30+k*225|0},${20+k*150|0},${60+k*30|0})`);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // 회전하는 빛줄기
+  if(t>3){ctx.save();ctx.translate(cx,H*0.42);ctx.rotate(t*0.15);ctx.globalAlpha=Math.min(0.25,(t-3)*0.08);
+    for(let i=0;i<16;i++){ctx.rotate(Math.PI/8);ctx.fillStyle=i%2?'#fff6c0':'#ffd23f';ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(-90,-1400);ctx.lineTo(90,-1400);ctx.fill();}
+    ctx.restore();}
+  // 별
+  ctx.fillStyle='#fff';for(let i=0;i<70;i++){const a=0.4+0.6*Math.abs(Math.sin(t*2+i));ctx.globalAlpha=a*(1-k*0.7);ctx.fillRect((i*137)%W,(i*71)%(H*0.6),3,3);}ctx.globalAlpha=1;
+  ctx.fillStyle=`rgba(60,140,60,${0.4+k*0.6})`;ctx.fillRect(0,H-150,W,150);
+
+  // 장면 1: 대마왕의 성이 무너진다 (0~4초)
+  if(t<4.5){const sh=t>1&&t<3.5?(Math.random()-.5)*30:0, sink=ease((t-1.2)/2.3)*420;
+    ctx.save();ctx.translate(cx+sh,0);ctx.beginPath();ctx.rect(-400,0,800,H-150);ctx.clip();
+    ctx.fillStyle='#4a2537';ctx.fillRect(-150,H-150-420+sink,300,420);for(let i=0;i<4;i++)ctx.fillRect(-150+i*85,H-150-480+sink,45,60);
+    ctx.fillStyle='#ff4d4d';ctx.beginPath();ctx.moveTo(0,H-150-560+sink);ctx.lineTo(-90,H-150-530+sink);ctx.lineTo(0,H-150-500+sink);ctx.fill();
+    ctx.restore();
+    if(t>1&&t<3.5&&Math.random()<0.5)CFX.push({k:'c',x:cx+(Math.random()-.5)*300,y:H-300,vx:(Math.random()-.5)*900,vy:-400-Math.random()*600,r:0,vr:5,s:26,c:'#6b3a4f',t:0,life:1.5});
+    ctx.globalAlpha=Math.min(1,t/0.8)*(t>3.6?Math.max(0,1-(t-3.6)/0.8):1);
+    txt('대마왕의 성이 무너진다…!',cx,170,80,'#fff');ctx.globalAlpha=1;
+    if(t>1&&t<3.5&&((t*10)|0)%3===0)beep(60+Math.random()*40,0.08,'sawtooth',0.03);
+  }
+  // 장면 2: 축하 타이틀 (4~)
+  if(t>4){const z=ease((t-4)/0.8), pul=1+Math.sin(t*4)*0.03;
+    ctx.save();ctx.translate(cx,170);ctx.scale(z*pul,z*pul);
+    txt('축하합니다!!',0,0,150,`hsl(${(t*90)%360},95%,62%)`);ctx.restore();
+    if(t>4.6){ctx.globalAlpha=ease((t-4.6)/0.6);txt(`${ACCOUNTS[acct].name}, 모든 단계를 클리어했어요!`,cx,300,58,'#fff');ctx.globalAlpha=1;}
+    // 불꽃놀이
+    END.fw-=dt; if(END.fw<=0){END.fw=t<20?0.35:0.6; rocket(0);}
+    if(t>4&&t<4.1&&!END.c1){END.c1=1;confetti(250);flashT=0.5;}
+  }
+  // 장면 3: 영웅 퍼레이드 (6~17초) — 아군이 불꽃을 두르고 행진
+  if(t>6&&t<18){const p=(t-6);
+    HEROES.forEach((d,i)=>{const im=IMG[d.id],h=190,w=h*im.w/im.h; const x=-200+p*260-i*230; if(x<-250||x>W+250)return;
+      const y=H-110-Math.abs(Math.sin(p*7+i))*70;
+      ctx.save();ctx.translate(x,y);ctx.rotate(Math.sin(p*7+i)*0.15);
+      for(let f=0;f<5;f++){const fx=(f/4-0.5)*w*0.9,hh=h*(0.6+0.3*Math.sin(t*14+f+i));const gg=ctx.createLinearGradient(0,0,0,-hh-60);
+        gg.addColorStop(0,'rgba(255,60,0,0.7)');gg.addColorStop(1,'rgba(255,220,0,0)');ctx.fillStyle=gg;ctx.beginPath();ctx.moveTo(fx-w*0.15,0);ctx.quadraticCurveTo(fx,-hh*0.6,fx,-hh-60);ctx.quadraticCurveTo(fx,-hh*0.6,fx+w*0.15,0);ctx.fill();}
+      ctx.drawImage(im.hero,-w/2,-h,w,h);ctx.restore();
+      txt(d.name,x,y+30,30,'#fff');});
+    txt('🎉 우리 영웅들의 승리 퍼레이드! 🎉',cx,420,52,'#ffd23f');
+  }
+  // 장면 4: 쓰러진 악당들이 별이 되어 사라짐 (17~23초)
+  if(t>17&&t<23.5){const bad=[...ENEMIES.slice(-5),BOSS,BOSS2];
+    bad.forEach((d,i)=>{const im=IMG[d.id],h=d.boss?260:170,w=h*im.w/im.h;const st=17+i*0.6, q=(t-st);
+      if(q<0)return; const x=cx+(i-(bad.length-1)/2)*240, pop=q>2.2;
+      if(!pop){ctx.save();ctx.translate(x,H-130);ctx.rotate(Math.sin(q*20)*0.2*Math.min(1,q));const sc=1-Math.max(0,q-1.5)/0.7*0.9;ctx.scale(sc,sc);ctx.drawImage(im.enemy,-w/2,-h,w,h);ctx.restore();}
+      else if(!END['p'+i]){END['p'+i]=1;beep(1200+i*100,0.1,'triangle',0.05);for(let j=0;j<30;j++){const a=j/30*6.283;CFX.push({k:'p',x,y:H-200,vx:Math.cos(a)*350,vy:Math.sin(a)*350,c:'#ffd23f',t:0,life:1.2});}}});
+    txt('악당들은 반짝이는 별이 되었습니다 ✨',cx,420,52,'#fff');
+  }
+  // 장면 5: 트로피와 명예의 전당 (23초~)
+  if(t>23){const q=t-23, ty=ease(q/1.2);
+    ctx.save();ctx.translate(cx,-300+ty*780);const s2=1+Math.sin(t*3)*0.04;ctx.scale(s2,s2);
+    ctx.fillStyle='#f59e0b';ctx.fillRect(-90,140,180,40);ctx.fillRect(-30,60,60,90);
+    ctx.fillStyle='#fbbf24';ctx.beginPath();ctx.moveTo(-140,-140);ctx.lineTo(140,-140);ctx.quadraticCurveTo(130,70,0,80);ctx.quadraticCurveTo(-130,70,-140,-140);ctx.fill();
+    ctx.strokeStyle='#fbbf24';ctx.lineWidth=22;ctx.beginPath();ctx.arc(-150,-60,55,Math.PI*0.5,Math.PI*1.5);ctx.stroke();ctx.beginPath();ctx.arc(150,-60,55,-Math.PI*0.5,Math.PI*0.5);ctx.stroke();
+    ctx.fillStyle='#fff8';ctx.beginPath();ctx.ellipse(-60,-70,18,60,0.2,0,7);ctx.fill();
+    txt('1',0,-40,110,'#b45309','center',null);ctx.restore();
+    if(q>1.3){ctx.globalAlpha=ease((q-1.3)/0.6);
+      ctx.fillStyle='#0008';rr(cx-560,700,1120,250,30);ctx.fill();
+      txt(`🏅 ${ACCOUNTS[acct].name} · 영어 영웅 🏅`,cx,750,54,'#ffd23f');
+      txt(`맞혀 본 단어 ${END.learned} / ${END.total}개   ·   최고 연속 정답 ${best}개`,cx,830,40,'#fff');
+      txt('그림: 유찬 · 채민      THE END',cx,900,36,'#fffc');ctx.globalAlpha=1;}
+    if(q>1.2&&!END.c2){END.c2=1;confetti(300);flashT=0.4;fanfare(12);}
+    // 양옆에서 응원하는 아군
+    HEROES.slice(0,6).forEach((d,i)=>{const im=IMG[d.id],h=150,w=h*im.w/im.h,side=i%2?1:-1,x=cx+side*(700+(i>>1)*120),y=H-60-Math.abs(Math.sin(t*8+i))*50;ctx.drawImage(im.hero,x-w/2,y-h,w,h);});
+  }
+  if(t>3)txt(t>23?'OK → 처음 화면':'OK → 건너뛰기',W-170,H-40,28,'#fff9');
+  if(t>40){screen='title';stopMusic();}
+}
+
 /* ===== 입력: 리모컨/키보드 + 터치/마우스 ===== */
 function press(k){
   if(!AC) beep(1,0.01,'sine',0.0001);
@@ -589,9 +696,9 @@ function press(k){
     return;
   }
   if(screen==='title'){
-    if(k==='up'||k==='down')trow=1-trow;
-    else if(k==='left'||k==='right'){ if(trow===0)stageIdx=(stageIdx+(k==='left'?STAGES.length-1:1))%STAGES.length; else tcol=1-tcol; }
-    else if(k==='ok'){ if(trow===0){newGame();streak=0;screen='play';} else if(tcol===0)startPractice(); else screen='account'; }
+    if(k==='up'||k==='down'){trow=1-trow; tcol=Math.min(tcol,titleBtns().length-1);}
+    else if(k==='left'||k==='right'){const n=titleBtns().length; if(trow===0)stageIdx=(stageIdx+(k==='left'?STAGES.length-1:1))%STAGES.length; else tcol=(tcol+(k==='left'?n-1:1))%n; }
+    else if(k==='ok'){ if(trow===0){newGame();streak=0;screen='play';} else if(tcol===0)startPractice(); else if(tcol===1)screen='account'; else startEnding(); }
     return;
   }
   if(screen==='quiz'||screen==='practice'){quizKey(k);return;}
@@ -600,6 +707,8 @@ function press(k){
     if(k==='left'||k==='right')loseSel=1-loseSel;
     else if(k==='ok'){ if(loseSel===0)startRevive(); else{S.revived=true;screen='title';} }
     return; }
+  if(screen==='ending'){ if(k==='ok'&&END.t>3){screen='title';stopMusic();} return; }
+  if(screen==='win'&&S.toEnding&&k==='ok'){startEnding();return;}
   if(screen==='win'||screen==='lose'){ if(k==='ok'){ if(screen==='win'&&stageIdx<STAGES.length-1)stageIdx++; screen='title';} return; }
   if(screen==='pause'){ if(k==='ok'||k==='pause')screen='play'; return; }
   if(k==='left')sel=(sel+HEROES.length-1)%HEROES.length;
@@ -619,10 +728,11 @@ addEventListener('keydown',e=>{
 });
 cv.addEventListener('pointerdown',e=>{
   const r=cv.getBoundingClientRect(), x=(e.clientX-r.left)*W/r.width, y=(e.clientY-r.top)*H/r.height;
+  if(screen==='ending'){press('ok');return;}
   if(screen==='account'){acct=x<W/2?0:1;pickAcct();return;}
   if(screen==='title'){
     if(y>590&&y<690){const i=Math.round((x-W/2)/440+1.5); if(i>=0&&i<STAGES.length){trow=0; if(i===stageIdx)press('ok'); else stageIdx=i;}}
-    else if(y>740&&y<840){const i=x<W/2?0:1; trow=1; if(tcol===i)press('ok'); else tcol=i;}
+    else if(y>740&&y<840){const n=titleBtns().length,sp=n>2?500:560;const i=Math.max(0,Math.min(n-1,Math.round((x-W/2)/sp+(n-1)/2))); trow=1; if(tcol===i)press('ok'); else tcol=i;}
     return;}
   if(screen==='quiz'||screen==='practice'){
     if(QZ.done){quizKey('ok');return;}
@@ -641,6 +751,7 @@ function loop(ts){
   const dt=Math.min(0.05,(ts-last)/1000||0);last=ts; fps=fps*0.95+(dt>0?1/dt:60)*0.05;
   if(screen==='account'){drawAccount(dt);}
   else if(screen==='title'){drawTitle(dt);}
+  else if(screen==='ending'){drawEnding(dt);}
   else if(screen==='practice'||screen==='practiceEnd'){titleT+=dt;drawBG(STAGES[stageIdx],titleT); if(screen==='practice')drawQuiz(dt); else drawPracticeEnd();}
   else{
     if(screen==='play')update(dt);
@@ -648,7 +759,7 @@ function loop(ts){
     drawBG(S.st,S.t); castle(OUR_X,S.ourHP,S.ourMax,true); castle(ENEMY_X,S.enHP,S.enMax,false);
     [...S.units].sort((a,b)=>a.z-b.z).forEach(drawUnit); drawFX(); ctx.restore();
     drawHUD();
-    if(screen==='win')overlay('승리!!','OK 버튼 → 다음 단계','#ffd23f');
+    if(screen==='win')overlay(S.toEnding?'모든 단계 클리어!!':'승리!!',S.toEnding?'OK 버튼 → 🎬 축하 영상 보기':'OK 버튼 → 다음 단계','#ffd23f');
     if(screen==='lose'){
       if(S.revived||!words().length) overlay(S.revived&&REV?'부활 실패…':'으앙 졌다…','OK 버튼 → 처음 화면','#ff6b6b');
       else{ctx.fillStyle='#000a';ctx.fillRect(0,0,W,H);txt('으앙 졌다…',W/2,H/2-200,130,'#ff6b6b');
