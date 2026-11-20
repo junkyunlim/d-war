@@ -162,7 +162,7 @@ const walletCost=l=>[0,160,320,480,640,800,960,1120,9e9][l];
 function spawn(def,side){
   const im=IMG[def.id]; const h=def.h; const w=h*im.w/im.h;
   S.units.push({def,side,x: side>0? OUR_X+60 : ENEMY_X-60, z:Math.random()*40-10, w,h,
-    hp:def.hp*(side<0?S.st.power:1), max:def.hp*(side<0?S.st.power:1),
+    hp:def.hp*(side<0?S.st.power:(S.powered?2:1)), max:def.hp*(side<0?S.st.power:(S.powered?2:1)),
     atkT:0.3, phase:Math.random()*6, lunge:0, flash:0, kb:0, dead:0});
 }
 
@@ -231,8 +231,9 @@ function update(dt){
     const hitCastle = !best && castleDist<=d.range;
     if(best||hitCastle){
       u.atkT-=dt;
-      if(u.atkT<=0){u.atkT=d.rate; u.lunge=1;
-        const a=d.atk*(u.side<0?S.st.power:1);
+      const boost=u.side>0&&S.powered?2:1;
+      if(u.atkT<=0){u.atkT=d.rate/boost; u.lunge=1;
+        const a=d.atk*(u.side<0?S.st.power:boost);
         if(d.range>200){const tx=best?best.x:castleX, ty=best?GROUND+best.z-best.h/2:GROUND-150; S.fx.push({type:'shot',x0:u.x,y0:GROUND+u.z-u.h*0.6,x1:tx,y1:ty,t:0,poop:d.poop,side:u.side});}
         if(best){ if(d.area) targets.forEach(o=>dmg(o,a)); else dmg(best,a);
           if(d.area){S.fx.push({type:'boom',x:best.x,y:GROUND+best.z-40,t:0});}
@@ -240,14 +241,14 @@ function update(dt){
         else { if(u.side>0)S.enHP-=a; else S.ourHP-=a; S.shake=0.15;
           S.fx.push({type:'boom',x:castleX,y:GROUND-150,t:0}); beep(120,0.1,'sawtooth',0.04);}
       }
-    } else u.x+=u.side*d.speed*dt;
+    } else u.x+=u.side*d.speed*dt*(u.side>0&&S.powered?2:1);
   }
   S.units=S.units.filter(u=>!(u.dead>0.9));
   for(const f of S.fx){f.t+=dt; if(f.type==='star'){f.x+=f.vx*dt;f.y+=f.vy*dt;f.vy+=1200*dt;}}
   S.fx=S.fx.filter(f=>f.t<(f.type==='text'?(f.big?2:0.8):f.type==='beam'?0.6:f.type==='wink'?0.7:f.type==='shot'?0.35:0.5));
 
   if(S.enHP<=0){screen='win';S.enHP=0;beep(523,0.2,'triangle');setTimeout(()=>beep(659,0.2,'triangle'),200);setTimeout(()=>beep(784,0.4,'triangle'),400);}
-  if(S.ourHP<=0){screen='lose';S.ourHP=0;beep(200,0.5,'sawtooth',0.06);}
+  if(S.ourHP<=0){screen='lose';loseSel=0;S.ourHP=0;beep(200,0.5,'sawtooth',0.06);}
 }
 
 /* ===== 그리기 ===== */
@@ -289,6 +290,15 @@ function drawUnit(u){
   ctx.globalAlpha=u.dead?Math.max(0,1-u.dead*1.2):1;
   ctx.fillStyle=u.side>0?'rgba(40,90,255,0.35)':'rgba(255,40,60,0.4)';ctx.beginPath();ctx.ellipse(u.x,y+4,u.w*0.38,12,0,0,7);ctx.fill();
   ctx.translate(u.x+lx,y-bob+fy-(u.dead?u.dead*200:0));ctx.rotate(tilt);
+  if(u.side>0&&S.powered&&!u.dead){const t=performance.now()/1000;
+    ctx.save();
+    for(let i=0;i<7;i++){const k=i/6, fx=(k-0.5)*u.w*0.9, fl=0.75+0.35*Math.sin(t*14+i*1.7+u.phase);
+      const hh=u.h*(0.55+0.35*Math.sin(k*Math.PI))*fl;
+      const g=ctx.createLinearGradient(0,0,0,-hh-u.h*0.4);g.addColorStop(0,'rgba(255,60,0,0.75)');g.addColorStop(0.45,'rgba(255,140,0,0.55)');g.addColorStop(1,'rgba(255,220,0,0)');
+      ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(fx-u.w*0.16,0);ctx.quadraticCurveTo(fx-u.w*0.2,-hh*0.6,fx+Math.sin(t*9+i)*12,-hh-u.h*0.4);ctx.quadraticCurveTo(fx+u.w*0.2,-hh*0.6,fx+u.w*0.16,0);ctx.fill();}
+    for(let i=0;i<5;i++){const p=((t*0.9+i/5+u.phase*0.1)%1);ctx.fillStyle=`rgba(255,${150+i*20},40,${1-p})`;
+      ctx.beginPath();ctx.arc(Math.sin(i*2.3+t*3)*u.w*0.4,-p*u.h*1.3,6*(1-p)+2,0,7);ctx.fill();}
+    ctx.restore();}
   const src=u.flash>0?(u.side>0?im.hit:im.hitE):(u.side>0?im.hero:im.enemy);
   ctx.drawImage(src,-u.w/2,-u.h,u.w,u.h);
   ctx.restore();
@@ -312,6 +322,7 @@ function drawHUD(){
   ctx.fillStyle=S.cannon>=1?'#ff5d5d':'#888';rr(W-424,26,388*S.cannon,68,16);ctx.fill();
   txt(S.cannon>=1?'▼ 대포 발사 준비!':'대포 충전 중…',W-230,60,32,'#fff');
   txt(S.st.name,W/2,140,36,'#fff');
+  if(S.powered)txt('🔥 파워 2배 🔥',W/2,235,40,`hsl(${(performance.now()/6)%60+10},100%,55%)`);
   if(words().length)txt(`${ACCOUNTS[acct].name} · 다음 단어 퀴즈 ${Math.ceil(S.quizT)}초 · 연속 정답 ${streak}`,W/2,190,28,'#fffc');
   // 카드
   HEROES.forEach((d,i)=>{
@@ -390,15 +401,22 @@ function pickWord(){
   const ws=words(); if(!ws.length)return null;
   const days=[...new Set(ws.map(w=>w.day))].sort().reverse();
   let sum=0; const acc=ws.map(w=>{const r=days.indexOf(w.day); let wt=r===0?6:r===1?3:1;
-    const st=STATS[w.w]||{c:0,w:0}; wt*=Math.max(0.3,1+st.w*0.7-Math.min(st.c,6)*0.1);
+    const st=STATS[w.w]||{c:0,w:0,r:0}; wt*=(1+st.w*0.7)*Math.max(0.05,Math.pow(0.5,st.r||0));
     if(recent.includes(w.w))wt*=0.02; return sum+=wt;});
   const x=Math.random()*sum, w=ws[Math.max(0,acc.findIndex(t=>t>=x))];
   recent.push(w.w); while(recent.length>Math.min(5,ws.length-1))recent.shift(); return w;
 }
-function makeQ(){
-  const w=pickWord(); if(!w)return null;
+const hardness=w=>{const st=STATS[w.w]||{c:0,w:0,r:0};return st.w*2-(st.r||0)*1.5+(st.c?0:1)+(w.w.length>7?0.5:0);};
+function pickHard(used){
+  const ws=words().filter(w=>!used.includes(w.w)); if(!ws.length)return null;
+  const sc=ws.map(w=>[hardness(w)+Math.random()*1.5,w]).sort((a,b)=>b[0]-a[0]);
+  return sc[Math.random()*Math.min(4,sc.length)|0][1];
+}
+function makeQ(hardW){
+  const w=hardW||pickWord(); if(!w)return null;
+  const run=(STATS[w.w]||{}).r||0;
   const ws=words().filter(x=>x.w!==w.w);
-  const types=['ko','ko','en','en','blank','blank'];
+  const types=hardW||run>=2?['en','blank','blank']:['ko','ko','en','en','blank','blank'];
   if(w.syn&&w.syn.length)types.push('syn'); if(w.ant&&w.ant.length)types.push('ant');
   const t=types[Math.random()*types.length|0];
   let q,ans,pool;
@@ -470,18 +488,36 @@ function say0(){if(QZ&&['ko','syn','ant'].includes(QZ.t))say(QZ.w.w);}
 function answer(i){
   if(!QZ||QZ.done||i>=QZ.opts.length)return;
   QZ.sel=i; QZ.done=true; QZ.dt=0; QZ.ok=QZ.opts[i]===QZ.ans;
-  const st=STATS[QZ.w.w]||(STATS[QZ.w.w]={c:0,w:0});
-  if(QZ.ok){st.c++;st.w=Math.max(0,st.w-1);streak++;beep(784,0.1,'triangle');setTimeout(()=>beep(1047,0.15,'triangle'),110);celebrate(streak);}
-  else{st.w++;QZ.lost=streak;streak=0;beep(180,0.3,'sawtooth',0.05);}
+  const st=STATS[QZ.w.w]||(STATS[QZ.w.w]={c:0,w:0,r:0});
+  if(QZ.ok){st.c++;st.r=(st.r||0)+1;st.w=Math.max(0,st.w-1);streak++;beep(784,0.1,'triangle');setTimeout(()=>beep(1047,0.15,'triangle'),110);celebrate(streak);}
+  else{st.w++;st.r=0;QZ.lost=streak;streak=0;beep(180,0.3,'sawtooth',0.05);}
   saveStats(); setTimeout(()=>say(QZ.w.w),300);
   if(quizFrom==='play'){ if(QZ.ok){QZ.reward=300+stageIdx*200+Math.min(streak-1,5)*100;
       S.money=Math.min(walletMax(S.wallet),S.money+QZ.reward); S.cannon=Math.min(1,S.cannon+0.35);} }
+  else if(quizFrom==='revive'){REV.n++; if(QZ.ok)REV.ok++;}
   else{PR.n++; if(QZ.ok)PR.score++; else PR.wrong.push(QZ.w);}
 }
 function closeQuiz(){
   if(quizFrom==='play'){screen='play';return;}
+  if(quizFrom==='revive'){
+    if(REV.ok<REV.n){screen='lose';S.revived=true;loseSel=1;beep(150,0.5,'sawtooth',0.06);return;}
+    if(REV.n>=REV.total){revive();return;}
+    REV.used.push(QZ.w.w); QZ=makeQ(pickHard(REV.used)); say0(); return;
+  }
   if(PR.n>=PR.total){screen='practiceEnd';beep(523,0.2,'triangle');return;}
   QZ=makeQ(); say0();
+}
+let REV=null, loseSel=0;
+function startRevive(){
+  REV={n:0,ok:0,total:3,used:[]}; quizFrom='revive'; QZ=makeQ(pickHard([])); screen='quiz'; say0();
+}
+function revive(){
+  S.revived=true; S.powered=true; S.ourHP=S.ourMax; screen='play'; S.shake=1; flashT=0.6; S.quizT=30;
+  for(const u of S.units){ if(u.dead)continue;
+    if(u.side>0){u.hp=u.max*2;u.max*=2;} else if(u.x<OUR_X+700){u.kb=400;dmg(u,300);} }
+  banner={s:'부활!! 파워 2배!!',c:'rainbow',t:0,sub:'아군 모두 불타오른다!'};
+  confetti(200); for(let i=0;i<8;i++)rocket(i*0.15); fanfare(12);
+  [130,165,196,262,330,392,523].forEach((f,i)=>setTimeout(()=>beep(f,0.3,'sawtooth',0.05),i*90));
 }
 function startPractice(){
   if(!words().length){beep(140,0.12,'sawtooth',0.03);return;}
@@ -507,8 +543,8 @@ function drawQuiz(dt){
   ctx.fillStyle='#000b';ctx.fillRect(0,0,W,H);
   if(streak>=5){const h=(performance.now()/5)%360;ctx.lineWidth=18;ctx.strokeStyle=`hsl(${h},95%,60%)`;rr(228,48,1464,984,48);ctx.stroke();}
   ctx.fillStyle='#fffaf0';rr(240,60,1440,960,40);ctx.fill();
-  const head=quizFrom==='practice'?`단어 연습 ${Math.min(PR.n+(QZ.done?0:1),PR.total)} / ${PR.total}   ·   맞힌 개수 ${PR.score}`:'단어 퀴즈! 맞히면 보너스';
-  ctx.fillStyle=quizFrom==='practice'?'#0ea5e9':'#f59e0b';rr(240,60,1440,110,40);ctx.fill();
+  const head=quizFrom==='revive'?`🔥 부활 도전 ${Math.min(REV.n+(QZ.done?0:1),3)} / 3  ·  하나라도 틀리면 끝!`:quizFrom==='practice'?`단어 연습 ${Math.min(PR.n+(QZ.done?0:1),PR.total)} / ${PR.total}   ·   맞힌 개수 ${PR.score}`:'단어 퀴즈! 맞히면 보너스';
+  ctx.fillStyle=quizFrom==='revive'?'#dc2626':quizFrom==='practice'?'#0ea5e9':'#f59e0b';rr(240,60,1440,110,40);ctx.fill();
   txt(head,W/2,115,46,'#fff');
   if(streak>=2){const p=1+Math.sin(performance.now()/120)*0.08;ctx.save();ctx.translate(1530,235);ctx.scale(p,p);ctx.rotate(-0.12);
     txt(`${streak} COMBO`,0,0,58,streak>=5?`hsl(${(performance.now()/4)%360},95%,55%)`:'#f97316','center','#000');ctx.restore();}
@@ -560,6 +596,10 @@ function press(k){
   }
   if(screen==='quiz'||screen==='practice'){quizKey(k);return;}
   if(screen==='practiceEnd'){ if(k==='ok')screen='title'; return; }
+  if(screen==='lose'&&!S.revived&&words().length){
+    if(k==='left'||k==='right')loseSel=1-loseSel;
+    else if(k==='ok'){ if(loseSel===0)startRevive(); else{S.revived=true;screen='title';} }
+    return; }
   if(screen==='win'||screen==='lose'){ if(k==='ok'){ if(screen==='win'&&stageIdx<STAGES.length-1)stageIdx++; screen='title';} return; }
   if(screen==='pause'){ if(k==='ok'||k==='pause')screen='play'; return; }
   if(k==='left')sel=(sel+HEROES.length-1)%HEROES.length;
@@ -588,6 +628,7 @@ cv.addEventListener('pointerdown',e=>{
     if(QZ.done){quizKey('ok');return;}
     for(let i=0;i<QZ.opts.length;i++){const [rx,ry,rw,rh]=optRect(i); if(x>=rx&&x<=rx+rw&&y>=ry&&y<=ry+rh){answer(i);return;}}
     return;}
+  if(screen==='lose'&&!S.revived&&words().length&&y>H/2+50&&y<H/2+190){loseSel=x<W/2?0:1;press('ok');return;}
   if(screen!=='play'){press('ok');return;}
   if(y>CARD_Y-6){for(let i=0;i<HEROES.length;i++){const cx=cardX(i);if(x>=cx&&x<=cx+CARD_W){press(i);return;}}}
   if(y<100&&x>560&&x<890)press('up');
@@ -608,7 +649,15 @@ function loop(ts){
     [...S.units].sort((a,b)=>a.z-b.z).forEach(drawUnit); drawFX(); ctx.restore();
     drawHUD();
     if(screen==='win')overlay('승리!!','OK 버튼 → 다음 단계','#ffd23f');
-    if(screen==='lose')overlay('으앙 졌다…','OK 버튼 → 다시 도전','#ff6b6b');
+    if(screen==='lose'){
+      if(S.revived||!words().length) overlay(S.revived&&REV?'부활 실패…':'으앙 졌다…','OK 버튼 → 처음 화면','#ff6b6b');
+      else{ctx.fillStyle='#000a';ctx.fillRect(0,0,W,H);txt('으앙 졌다…',W/2,H/2-200,130,'#ff6b6b');
+        txt('어려운 단어 3개를 모두 맞히면 부활! 아군 파워 2배!',W/2,H/2-60,46,'#ffd23f');
+        [['🔥 부활 도전!','#f97316'],['포기하기','#555']].forEach(([t,c],i)=>{const x=W/2+(i-0.5)*560,y=H/2+120,on=loseSel===i;
+          if(on){ctx.fillStyle='#fff';rr(x-245,y-65,490,130,34);ctx.fill();}
+          ctx.fillStyle=c;rr(x-235,y-55,470,110,28);ctx.fill();txt(t,x,y,52,'#fff');});
+        txt('◀ ▶ 고르고 OK',W/2,H/2+260,40,'#fff');}
+    }
     if(screen==='pause')overlay('잠깐 멈춤','OK 버튼 → 계속','#fff');
     if(screen==='quiz')drawQuiz(dt);
   }
