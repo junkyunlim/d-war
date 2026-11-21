@@ -519,7 +519,7 @@ function drawHUD(){
   // 카드
   HEROES.forEach((d,i)=>{
     const x=cardX(i),y=CARD_Y, ok=S.money>=d.cost&&S.cd[i]<=0, on=i===sel;
-    ctx.fillStyle=on?'#ffd23f':'#00000088';rr(x-6,y-6,CARD_W+12,CARD_H+12,22);ctx.fill();
+    const on2=PADS.n>1&&i===sel2; ctx.fillStyle=on&&on2?'#a3e635':on?'#ffd23f':on2?'#22d3ee':'#00000088';rr(x-6,y-6,CARD_W+12,CARD_H+12,22);ctx.fill();
     ctx.fillStyle=ok?'#fffaf0':'#9a9a9a';rr(x,y,CARD_W,CARD_H,18);ctx.fill();
     const im=IMG[d.id], s=Math.min((CARD_W-20)/im.w,(CARD_H-70)/im.h);
     ctx.globalAlpha=ok?1:0.5;ctx.drawImage(im.hero,x+CARD_W/2-im.w*s/2,y+10,im.w*s,im.h*s);ctx.globalAlpha=1;
@@ -527,8 +527,9 @@ function drawHUD(){
     txt(`${d.cost}원`,x+CARD_W/2,y+CARD_H-20,26,ok?'#d97706':'#555','center',null);
     if(S.cd[i]>0){ctx.fillStyle='#0007';rr(x,y,CARD_W,CARD_H*(S.cd[i]/d.cd),18);ctx.fill();}
     if(i<10)txt(String((i+1)%10),x+20,y+22,26,'#fff');
+    if(PADS.n>1){ if(on)txt('1P',x+CARD_W-24,y-20,26,'#ffd23f'); if(on2)txt('2P',x+CARD_W-24,y-(on?46:20),26,'#22d3ee'); }
   });
-  {const x=cardX(SUPER),y=CARD_Y,on=sel===SUPER,full=S.sup>=1&&!S.dragon,t=performance.now()/1000;
+  {const x=cardX(SUPER),y=CARD_Y,on=sel===SUPER||(PADS.n>1&&sel2===SUPER),full=S.sup>=1&&!S.dragon,t=performance.now()/1000;
    if(full){ctx.fillStyle=`hsl(${(t*200)%360},95%,60%)`;rr(x-10,y-10,CARD_W+20,CARD_H+20,26);ctx.fill();}
    ctx.fillStyle=on?'#ffd23f':'#00000088';rr(x-6,y-6,CARD_W+12,CARD_H+12,22);ctx.fill();
    ctx.fillStyle='#1e1b4b';rr(x,y,CARD_W,CARD_H,18);ctx.fill();
@@ -897,7 +898,8 @@ function drawEnding(dt){
 }
 
 /* ===== 입력: 리모컨/키보드 + 터치/마우스 ===== */
-function press(k){
+let sel2=1, PL=0;
+function press(k,pl=0){ PL=pl;
   if(!AC) beep(1,0.01,'sine',0.0001);
   if(screen==='account'){
     if(k==='left'||k==='right')acct=1-acct;
@@ -921,6 +923,7 @@ function press(k){
   if(screen==='win'&&S.toEnding&&k==='ok'){startEnding();return;}
   if(screen==='win'||screen==='lose'){ if(k==='ok'){ if(screen==='win'&&stageIdx<STAGES.length-1)stageIdx++; screen='title';} return; }
   if(screen==='pause'){ if(k==='ok'||k==='pause')screen='play'; return; }
+  if(pl===1){ if(k==='left')sel2=(sel2+NC-1)%NC; else if(k==='right')sel2=(sel2+1)%NC; else if(k==='ok'){ if(sel2===SUPER)fireDragon(); else heroSpawn(sel2);} else if(k==='up')upgradeWallet(); else if(k==='down')fireCannon(); else if(k==='pause')screen='pause'; return; }
   if(k==='left')sel=(sel+NC-1)%NC;
   else if(k==='right')sel=(sel+1)%NC;
   else if(k==='ok'){ if(sel===SUPER)fireDragon(); else heroSpawn(sel); }
@@ -955,6 +958,46 @@ cv.addEventListener('pointerdown',e=>{
   if(y<100&&x>W-430)press('down');
 });
 
+/* ===== 게임패드 / 조이콘 ===== */
+const PADS={n:0,state:{},last:'',names:[]};
+const HAT=['up','up','right','down','down','down','left','up']; // 8방향 → 4방향
+function hatDir(v){ if(v===undefined||v>1.05||v<-1.05)return ''; const i=Math.round((v+1)/(2/7)); return ['up','upright','right','downright','down','downleft','left','upleft'][i]||''; }
+function padDir(gp){
+  const b=gp.buttons, B=i=>b[i]&&b[i].pressed;
+  if(gp.mapping==='standard'){ if(B(12))return 'up'; if(B(13))return 'down'; if(B(14))return 'left'; if(B(15))return 'right'; }
+  let x=gp.axes[0]||0, y=gp.axes[1]||0;
+  if(Math.abs(x)>0.55||Math.abs(y)>0.55) return Math.abs(x)>Math.abs(y)?(x>0?'right':'left'):(y>0?'down':'up');
+  if(gp.axes.length>=10){const h=hatDir(gp.axes[9]); if(h)return h.includes('left')?'left':h.includes('right')?'right':h;}
+  return '';
+}
+function pollPads(dt){
+  let list=[]; try{list=[...(navigator.getGamepads?navigator.getGamepads():[])].filter(Boolean);}catch(e){}
+  PADS.n=list.length; PADS.names=list.map(g=>g.id);
+  list.forEach((gp,pi)=>{
+    const st=PADS.state[gp.index]||(PADS.state[gp.index]={btn:[],dir:'',hold:0});
+    const pl=Math.min(pi,1);
+    gp.buttons.forEach((bt,i)=>{const p=bt.pressed||bt.value>0.6;
+      if(p&&!st.btn[i]){ PADS.last=`${pl+1}P 버튼 ${i}`;
+        if(gp.mapping==='standard'&&i>=12&&i<=15){} // 방향은 아래에서 처리
+        else if(i===8||i===9||i===16) press('pause',pl);
+        else if(i===4||i===6) press('left',pl);
+        else if(i===5||i===7) press('right',pl);
+        else press('ok',pl); }
+      st.btn[i]=p;});
+    const d=padDir(gp);
+    if(d&&d!==st.dir){press(d,pl);st.hold=0.4;PADS.last=`${pl+1}P ${({up:'▲',down:'▼',left:'◀',right:'▶'})[d]}`;}
+    else if(d&&(d==='left'||d==='right')){st.hold-=dt; if(st.hold<=0){st.hold=0.14;press(d,pl);}}
+    st.dir=d;
+  });
+}
+addEventListener('gamepadconnected',e=>{beep(880,0.1,'triangle');beep(1320,0.12,'triangle');});
+function drawPadBadge(){
+  if(!PADS.n)return;
+  const pl=screen==='play'||screen==='pause', cx=pl?W/2:W-300, cy=pl?H-242:40;
+  ctx.fillStyle='#000a';rr(cx-270,cy-20,540,40,14);ctx.fill();
+  txt(`🎮 컨트롤러 ${PADS.n}개 연결됨${PADS.last?'  ·  '+PADS.last:''}`,cx,cy,24,'#a7f3d0');
+}
+
 /* ===== 메인 루프 ===== */
 let last=0, fps=60;
 function loop(ts){
@@ -982,7 +1025,7 @@ function loop(ts){
     if(screen==='pause')overlay('잠깐 멈춤','OK 버튼 → 계속','#fff');
     if(screen==='quiz')drawQuiz(dt);
   }
-  updFX(dt); drawFXTop();
+  pollPads(dt); updFX(dt); drawFXTop(); if(screen!=='play'||PADS.last)drawPadBadge();
   if(location.hash==='#fps')txt(Math.round(fps)+' fps',W-90,140,30,'#0f0','center');
   requestAnimationFrame(loop);
 }
