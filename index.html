@@ -193,10 +193,11 @@ function bgmNote(f,t,d,type,v){const o=AC.createOscillator(),g=AC.createGain();o
   g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(v,t+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(BGM.gain);o.start(t);o.stop(t+d+0.02);}
 function bgmTick(){
   if(!AC||!BGM.song)return; const S=SONGS[BGM.song], dt=60/S.bpm/4;
-  BGM.gain.gain.setTargetAtTime((MUSIC_ON?0.5:0)*BGM.duck,AC.currentTime,0.1);
+  BGM.gain.gain.setTargetAtTime((MUSIC_ON?1.0:0)*BGM.duck,AC.currentTime,0.1);
   while(BGM.next<AC.currentTime+0.25){const i=BGM.step%S.mel.length,m=S.mel[i],b=S.bass[i%S.bass.length];
-    if(MUSIC_ON){ if(m)bgmNote(NF(m),BGM.next,dt*1.8,'square',0.035); if(b)bgmNote(NF(b),BGM.next,dt*0.9,'triangle',0.07);
-      if(i%4===0)bgmNote(60,BGM.next,0.05,'sine',0.08);}
+    if(MUSIC_ON){ if(m)bgmNote(NF(m),BGM.next,dt*1.8,'square',0.06); if(b)bgmNote(NF(b+12),BGM.next,dt*0.9,'sawtooth',0.04);
+      if(i%4===0)bgmNote(90,BGM.next,0.06,'square',0.05);}
+    BGM.played=(BGM.played||0)+1;
     BGM.next+=dt;BGM.step++;}
 }
 function playSong(name){ if(!AC)return; if(!BGM.gain){BGM.gain=AC.createGain();BGM.gain.connect(AC.destination);BGM.timer=setInterval(bgmTick,80);}
@@ -795,6 +796,9 @@ function drawTitle(dt){
     ctx.fillStyle=on?'#7dd3fc':'#0008';rr(x-bw/2,y-50,bw,100,24);ctx.fill();
     txt(t,x,y,B.length>3?34:40,on?'#123':(en?'#fff':'#999'),'center',on?null:'#000');});
   txt('◀▶▲▼ 고르기 · OK 시작',W/2,935,38,'#fff');
+  {let ss='없음'; try{ if(window.speechSynthesis){const v=speechSynthesis.getVoices(); const ko=v.filter(x=>(x.lang||'').toLowerCase().startsWith('ko')).length; ss=`있음 · 목소리 ${v.length}개 · 한국어 ${ko}개`;} }catch(e){ss='오류';}
+   const ms=!AC?'대기(버튼 누르면 시작)':`${AC.state} · 음표 ${BGM.played||0}`;
+   txt(`[소리 점검] 음악: ${MUSIC_ON?ms:'꺼짐'}   |   음성 기능: ${ss}`,W-20,1060,22,'#fffa','right','#000');}
   txt('게임 중: ◀▶ 캐릭터 · OK 출동 · ▲ 지갑 · ▼ 대포 · 30초마다 단어 퀴즈!',W/2,995,30,'#fffd');
 }
 function drawAccount(dt){
@@ -817,7 +821,7 @@ const words=()=>(window.WORDS&&WORDS[ACCOUNTS[acct].id])||[];
 function loadStats(){try{return JSON.parse(localStorage.getItem('dw_stats_'+ACCOUNTS[acct].id))||{};}catch(e){return {};}}
 function saveStats(){try{localStorage.setItem('dw_stats_'+ACCOUNTS[acct].id,JSON.stringify(STATS));}catch(e){}}
 let STATS=loadStats(), recent=[], QZ=null, quizFrom='play', streak=0, PR=null;
-function pickAcct(){try{localStorage.setItem('dw_acct',acct);}catch(e){} STATS=loadStats(); loadBest(); loadClear(); recent=[]; streak=0; trow=0; screen='title';}
+function pickAcct(){ try{say(`${ACCOUNTS[acct].name}, 안녕! 오늘도 화이팅!`,'ko-KR');}catch(e){}try{localStorage.setItem('dw_acct',acct);}catch(e){} STATS=loadStats(); loadBest(); loadClear(); recent=[]; streak=0; trow=0; screen='title';}
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}return a;}
 // 최근 등록일 단어 가중치 6, 그 전 3, 나머지 1 / 틀린 횟수만큼 가중 / 방금 나온 단어는 제외
 // 공통 출제 가중치: 틀린 문제는 많이, 연속으로 맞힌 문제는 적게, 처음 보는 문제는 보통
