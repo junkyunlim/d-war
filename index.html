@@ -290,7 +290,7 @@ function spawn(def,side){
 function heroSpawn(i){
   const d=HEROES[i];
   if(S.cd[i]>0||S.money<d.cost){beep(140,0.12,'sawtooth',0.03);return;}
-  S.money-=d.cost; S.cd[i]=d.cd; spawn(d,1); discover(d,1); if(d.id==='c37'&&!S.u37shown&&BOSS_VID.u37){S.u37shown=1; startCut(d,'u37');} beep(660,0.08); beep(990,0.06,'triangle');
+  S.money-=d.cost; S.cd[i]=d.cd; spawn(d,1); discover(d,1); beep(660,0.08); beep(990,0.06,'triangle');
 }
 function upgradeWallet(){
   const c=walletCost(S.wallet);
@@ -1534,7 +1534,7 @@ const BOSS_INFO={
  c35:{c:['#fcd34d','#b45309'],lv:3,f:['끝없는 모래사막에 살아요','입으로 모래 폭풍을 일으켜요','폭풍이 불면 우리 편이 밀려나요']},
  c30:{c:['#4ade80','#581c87'],lv:4,f:['수많은 촉수를 마구 휘둘러요','촉수 대난타로 모두를 공격해요','쓰러뜨려야 적의 성이 무너져요']},
  c33:{c:['#e5e7eb','#6b21a8'],lv:5,f:['하늘에서 구슬 폭탄 비를 내려요','부하 몬스터를 불러내요','쓰러뜨려야 적의 성이 무너져요']},
- u37:{c:['#60a5fa','#f59e0b'],hero:true,lv:0,f:['작은 탱크와 로봇들이 모여 하나로 합체!','위아래 대포에서 무지개 미사일 발사','튼튼한 몸으로 우리 편을 지켜요']},
+ u37:{c:['#60a5fa','#f59e0b'],hero:true,lv:0,f:['연합 탱크 + 무적탱크 합체!','무지개 미사일 7발 · 무적 방어막','두 탱크를 합친 체력의 1.5배']},
  c34:{c:['#f9a8d4','#38bdf8'],lv:5,f:['꽃잎과 바람을 마음대로 다뤄요','꽃잎 폭풍으로 우리 편을 날려요','모든 몬스터 중 가장 강해요!']},
 };
 const COMBO_DEF={id:'combo',name:'초거대 합체탱크',cost:0,hp:30000,atk:600,range:130,speed:30,rate:1.0,cd:0,h:640,area:true,tank:true,mega:true,armor:0.5,combo:true};
@@ -1696,6 +1696,7 @@ const mergeReady=()=>!S.merge&&!!tankOf('c37')&&!!tankOf('c38');
 function tryMerge(){ if(!mergeReady()){beep(140,0.12,'sawtooth',0.03); S.fx.push({type:'text',x:W/2,y:300,s:'연합 탱크와 무적탱크가 둘 다 있어야 합체할 수 있어요!',t:0,col:'#fff'}); return;}
   const a=tankOf('c37'), b=tankOf('c38'); a.merging=b.merging=true; a.shT=b.shT=3;
   S.merge={a,b,t:0,x:(a.x+b.x)/2}; banner={s:'합체 시작!!',c:'rainbow',t:0,sub:'연합 탱크 + 무적탱크'};
+  if(BOSS_VID.u37)startCut(COMBO_DEF,'u37');
   [262,330,392,523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>beep(f,0.2,'sawtooth',0.04),i*190));}
 function updMerge(dt){const M=S.merge; if(!M)return; M.t+=dt;
   for(const u of [M.a,M.b]){u.x+=(M.x-u.x)*Math.min(1,dt*2.5); u.kb=0;}
